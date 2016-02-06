@@ -78,10 +78,11 @@ else:
     writer.write(frame)
 
 
-# Temporal Average
+# Finding Temporal Average
+
 allFrames = []
 allFrames.append(np.array(frame, dtype = 'int32'))
-# Loop until movie is ended:
+# Loop until movie is ended and add frames:
 while True:
     # Get the frame.
     ok, frame = capture.read(frame)
@@ -93,21 +94,19 @@ while True:
     allFrames.append(np.array(frame, dtype = 'int32'))
     
 npAllFrames = np.stack(allFrames)
-#avgFrame = np.mean(npAllFrames, axis = 0, dtype = 'int32')
-avgFrame = np.median(npAllFrames, axis = 0)
+# Find average frame
+avgFrame = np.mean(npAllFrames, axis = 0, dtype = 'int32')
 
-cv2.imwrite('image.png', avgFrame)
+cv2.imwrite('avgImage.png', avgFrame)
 
+# calculate differences between each frame and the average
 allDiffs = np.absolute(npAllFrames - avgFrame)
 
-numFrames = np.shape(npAllFrames)[0]
-
+# threshold each difference to see what exactly is moving
 allThresholds = []
-
 for matrix in allDiffs:
     matrix = matrix.astype('uint8')
-    matrix = cv2.cvtColor(matrix, cv2.COLOR_BGR2GRAY)
-    matrix = thresholdFrame(matrix)
+    matrix = thresholdFrame(cv2.cvtColor(matrix, cv2.COLOR_BGR2GRAY))
     allThresholds.append(matrix)
 
     # Write if we have a writer.
@@ -116,7 +115,7 @@ for matrix in allDiffs:
 
     # Throw it up on the screen.
     cv2.imshow('Video', matrix)
-    # Delay for 5ms and get a key
+    # Delay for 50ms and get a key
     k = cv2.waitKey(50)
 
 
