@@ -44,6 +44,7 @@ if not ok or frame is None:
 
 
 # Finding Temporal Average
+print "Pre-Processing"
 
 allFrames = []
 allFrames.append(np.array(frame, dtype = 'int32'))
@@ -69,14 +70,12 @@ npAllFrames = np.stack(allFrames[:-30])
 # keep track of original
 rgbAllFrames = npAllFrames.astype('uint8')
 
-print "calculating differences"
 # find difference b/w each frame and average
 # multiple lines for efficiency
 npAllFrames -= avgFrame
 npAllFrames /= 2
 npAllFrames += 127
 npAllFrames = npAllFrames.astype('uint8')
-print "differences done"
 
 # store frames after thresholding
 allThresholds = []
@@ -90,7 +89,8 @@ for i, frame in enumerate(npAllFrames):
     frame = cv2.erode(frame,kernel, iterations = 3)
     allThresholds.append(frame)
 
-    if i%100 == 0:
+    # sample intermediate frames
+    if i%500 == 0:
 
         cv2.imwrite('thresholdFrame' + str(i) + '.png', frame)
 
@@ -99,7 +99,6 @@ for i, frame in enumerate(npAllFrames):
     cv2.imshow('Highlighted', frame)
     k = cv2.waitKey(10)
 
-print "thresholded"
 # store centroids of each cup
 allCentroids = []
 curCentroids = [None]*numObjects
@@ -114,7 +113,7 @@ for i, frame in enumerate(allThresholds):
     
     display = rgbAllFrames[i] #output frame
 
-    areas = []
+    areas = [] # for centroids
     
     # For each contour in the image
     for j in range(len(contours)):
@@ -122,7 +121,8 @@ for i, frame in enumerate(allThresholds):
         curContour = contours[j]
         areas.append((cv2.contourArea(curContour), curContour))
 
-    areas.sort(key = lambda tup: tup[0])
+    # only want to look at biggest contours
+    areas.sort(key = lambda tup: tup[0]) 
     
     if len(areas) >= numObjects:
 
@@ -132,6 +132,8 @@ for i, frame in enumerate(allThresholds):
             x, y, w, h = cv2.boundingRect(curContour)
             centroid = (x + w/2, y + h/2)
             
+            # find which cup the centroid belongs to
+
             if len(allCentroids) >= numObjects:
                 # find centroid in last frame that was closest
                 norms = map(lambda pos: np.linalg.norm(np.subtract(pos,centroid)), \
@@ -140,17 +142,20 @@ for i, frame in enumerate(allThresholds):
             else:
                 cupNum = j
 
+            # draw centroids
             allCentroids.append((centroid, cupNum))
             curCentroids[cupNum] = centroid
             color = cvk2.getccolors()[cupNum]
             cv2.rectangle(display, (x, y), (x+w, y+h), color, 2)
 
+        # store endpoints for line
         if prevCentroids[0] != None:
             for j in range(numObjects):
                 lineEndpoints.append((prevCentroids[j], curCentroids[j]))
 
-        prevCentroids = curCentroids[:]
+        prevCentroids = curCentroids[:] # copy elements instead of point
 
+    # draw all lines
     for j in range(0, len(lineEndpoints) - numObjects, numObjects):
         for k in range(numObjects):
             cupNum = k
