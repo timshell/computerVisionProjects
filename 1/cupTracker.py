@@ -8,12 +8,20 @@ to isolate moving cups
 import cv2
 import numpy as np
 import sys
-import cvk2
 
 MINAREA = 256 # for contours
 
-# Read in the video - based on Zucker's original code
+#inspired by the cvk2 getccolors function
+#adapted for more contrast
+def getccolors():
+    colors = [(255, 63, 0), (63,  0, 255),
+              (0, 255, 63), (63, 191, 255),
+              (0, 255, 63), (0, 63, 255),
+              (191, 255, 0), (191, 0, 255)]
+    return colors
 
+
+# Read in the video - based on Zucker's original code
 input = None
 
 if len(sys.argv) != 3:
@@ -46,10 +54,13 @@ if not ok or frame is None:
     sys.exit(1)
 
 # Finding Temporal Average
-print "Pre-Processing (may take long depending on how much memory your system has)"
+print "Pre-Processing (may take longer depending on how much memory your system has)"
+print "Reading in Video..."
 
 allFrames = []
-allFrames.append(np.array(frame, dtype = 'int32'))
+origFrames = []
+allFrames.append(np.array(frame, dtype = 'uint8')/2)
+origFrames.append(np.array(frame, dtype = 'uint8'))
 # Loop until movie is ended and add frames:
 while True:
     # Get the frame.
@@ -59,32 +70,26 @@ while True:
     if not ok or frame is None:
         break
 
-    allFrames.append(np.array(frame, dtype = 'int32'))
+    allFrames.append(np.array(frame.astype('uint8'))/2)
+    origFrames.append(np.array(frame.astype('uint8')))
 
-
-# find background frame
-npBackgroundFrames = np.stack(allFrames[:10])
-avgFrame = np.median(npBackgroundFrames, axis = 0).astype('int32')
-cv2.imwrite(filename + 'avgFrame.png', avgFrame)
-print "Calculated Background"
 # taking out ending frames due to hand ending video
 npAllFrames = np.stack(allFrames[:-30])
+print "Video Read"
 
-# keep track of original
-rgbAllFrames = npAllFrames.astype('uint8')
+#get the background from the first 10 frames
+avgFrame = np.median(allFrames[:10], axis = 0).astype('uint8')
+cv2.imwrite(filename + 'avgFrame.png', avgFrame*2)
 
-# find difference b/w each frame and average
-# multiple lines for efficiency
-npAllFrames -= avgFrame
-npAllFrames /= 2
-npAllFrames += 127
-npAllFrames = npAllFrames.astype('uint8')
-print "Found Background Difference"
+print "Calculated Background"
+
 # store frames after thresholding
 allThresholds = []
 for i, frame in enumerate(npAllFrames):
     
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    frame -= avgFrame
+    frame += 127
+    frame = cv2.cvtColor(frame.astype('uint8'), cv2.COLOR_BGR2GRAY)
     ret, frame = cv2.threshold(frame, 150, 255, cv2.THRESH_BINARY)
     
     # erode thin edges
@@ -95,11 +100,7 @@ for i, frame in enumerate(npAllFrames):
     # sample middle thresholded frame
     if i == len(npAllFrames)/2:
         cv2.imwrite(filename + 'thresholdFrame.png', frame)
-    """
-    # Display the output image and wait for a keypress.
-    cv2.imshow('Highlighted', frame)
-    k = cv2.waitKey(10)
-    """
+
 print "Done Thresholding"
 # store centroids of each cup
 allCentroids = []
@@ -113,7 +114,7 @@ for i, frame in enumerate(allThresholds):
     frame, contours, hierarchy = cv2.findContours(frame, cv2.RETR_CCOMP,
                                               cv2.CHAIN_APPROX_SIMPLE)
     
-    display = rgbAllFrames[i] #output frame
+    display = origFrames[i] #output frame
 
     areas = [] # for centroids
     
@@ -152,7 +153,7 @@ for i, frame in enumerate(allThresholds):
             curCentroids[cupNum] = centroid
 
             # draw rectangle around centroid
-            color = cvk2.getccolors()[cupNum]
+            color = getccolors()[cupNum]
             cv2.rectangle(display, (x, y), (x+w, y+h), color, 2)
 
             # update previous centroids and append to line endpoints
@@ -168,7 +169,7 @@ for i, frame in enumerate(allThresholds):
 
     # Display the output image and wait for a keypress.
     cv2.imshow('Highlighted', display)
-    k = cv2.waitKey(10)
+    k = cv2.waitKey(30)
 
 
 # plot lines on blank black background
